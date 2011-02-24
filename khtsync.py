@@ -274,14 +274,15 @@ class Sync():
         for relpath in update['update_remote']:
             print 'DEBUG : Uploading : ', relpath
             if os.path.isdir(os.path.join(self.local_dir,relpath)):
-                if self.exists(os.path.join(self.remote_dir,relpath)): #Old as a file
+                if self.exists(os.path.join(self.remote_dir,relpath)): #Already exists
                     if not self.isdir(os.path.join(self.remote_dir,relpath)): #Old as a file
-                        self.sftp.remove(os.path.join(self.local_dir,relpath))
-                    else:
-                        utime=os.path.getmtime(os.path.join(self.local_dir,relpath))
-                        self.sftp.utime(os.path.join(self.remote_dir,relpath),(utime,utime))
+                        self.sftp.remove(os.path.join(self.remote_dir,relpath))
+                        print 'Debug sftp.mkdir ',os.path.join(self.remote_dir,relpath)
+                        self.sftp.mkdir(os.path.join(self.remote_dir,relpath))
+                    utime=os.path.getmtime(os.path.join(self.local_dir,relpath))
+                    self.sftp.utime(os.path.join(self.remote_dir,relpath),(utime,utime))
                 else:
-                    print 'Debug mkdir ',os.path.join(self.remote_dir,relpath)
+                    print 'Debug sftp.mkdir ',os.path.join(self.remote_dir,relpath)
                     self.sftp.mkdir(os.path.join(self.remote_dir,relpath))
                     utime=os.path.getmtime(os.path.join(self.local_dir,relpath))
                     self.sftp.utime(os.path.join(self.remote_dir,relpath),(utime,utime))
@@ -302,13 +303,15 @@ class Sync():
         for relpath in update['update_local']:
             print 'DEBUG : Downloading : ', relpath
             if self.isdir(os.path.join(self.remote_dir,relpath)):
-                if os.path.exists(os.path.join(self.local_dir,relpath)): #Old as a file
+                if os.path.exists(os.path.join(self.local_dir,relpath)): #Already exists
                     if not os.path.isdir(os.path.join(self.local_dir,relpath)): #Old as a file:
                         os.remove(os.path.join(self.local_dir,relpath))
-                    else:
-                        utime=self.sftp.lstat(os.path.join(self.remote_dir, relpath)).st_mtime
-                        os.utime(os.path.join(self.local_dir,relpath),(utime,utime))
+                        print 'Debug mkdir ',os.path.join(self.remote_dir,relpath)
+                        os.mkdir(os.path.join(self.local_dir,relpath))
+                    utime=self.sftp.lstat(os.path.join(self.remote_dir, relpath)).st_mtime
+                    os.utime(os.path.join(self.local_dir,relpath),(utime,utime))
                 else:
+                    print 'Debug mkdir ',os.path.join(self.remote_dir,relpath)
                     os.mkdir(os.path.join(self.local_dir,relpath))
                     utime=self.sftp.lstat(os.path.join(self.remote_dir, relpath)).st_mtime
                     os.utime(os.path.join(self.local_dir,relpath),(utime,utime))
