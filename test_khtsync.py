@@ -3,6 +3,8 @@
 # Copyright (c) 2010 Benoît HERVIER
 # Licenced under GPLv3
 
+global USER
+global PASSWORD
 USER = ''
 PASSWORD = ''
 
@@ -20,6 +22,8 @@ class TestSync(unittest.TestCase):
 
     def testCreateFolder(self):
         """ Check the upload and download of folder """
+        global USER
+        global PASSWORD
         try:
             shutil.rmtree('/tmp/origin')
             shutil.rmtree('/tmp/dest')
@@ -38,6 +42,8 @@ class TestSync(unittest.TestCase):
 
     def testCreateFile(self):
         """ Check the upload and download of files """
+        global USER
+        global PASSWORD
         try:
             shutil.rmtree('/tmp/origin')
             shutil.rmtree('/tmp/dest')
@@ -67,6 +73,8 @@ class TestSync(unittest.TestCase):
         assert hashlib.md5(dest) != hashlib.md5('test_dest') , 'Syncing file to ssh didn work diff in the md5'
 
     def testFolderReplacedByFile(self):
+        global USER
+        global PASSWORD
         try:
             shutil.rmtree('/tmp/origin')
             shutil.rmtree('/tmp/dest')
@@ -96,6 +104,8 @@ class TestSync(unittest.TestCase):
         assert hashlib.md5(dest) != hashlib.md5('test_dest') , 'Syncing file to ssh didn work'
         
     def testRsyncedFile(self):
+        global USER
+        global PASSWORD
         try:
             shutil.rmtree('/tmp/origin')
             shutil.rmtree('/tmp/dest')
@@ -137,4 +147,8 @@ class TestSync(unittest.TestCase):
         assert hashlib.md5(origin_test_dest) != hashlib.md5(dest_test_dest) , 'Rsynced download differ'
                         
 if __name__ == "__main__":
+    USER = sys.argv[1]
+    PASSWORD = sys.argv[2]
+    del sys.argv[2]
+    del sys.argv[1]
     unittest.main()   
