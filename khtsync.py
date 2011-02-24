@@ -180,7 +180,7 @@ class Sync():
                 if old_local_dirs[relpath]>=remote_files[relpath]:
                     update['delete_remote'].append(relpath)
             if relpath in remote_dirs:
-                if old_local_dirs[relpath]>=remote_dirs[relpath]:
+                if old_local_files[relpath]>=remote_dirs[relpath]:
                     update['delete_remote'].append(relpath)
 
         #Deleted local dirs
