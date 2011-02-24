@@ -74,11 +74,6 @@ class Sync():
             return False
         return True
 
-    def isfile(self, path):
-        status = self.run('[ -d %s ] || echo "FALSE"' % path)
-        if status[1].startswith('FALSE'):
-            return False
-        return True
     def exists(self, path):
         status = self.run('[ -a %s ] || echo "FALSE"' % path)
         if status[1].startswith('FALSE'):
