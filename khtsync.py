@@ -102,9 +102,12 @@ class Sync():
         delta = rsync.rsyncdelta(newfile, hashes)
 
         topatch.seek(0)
-        fh = open(os.path.join(self.local_dir,relpath), "wb")
-        rsync.patchstream(topatch, fh, delta)
+        readed = StringIO.StringIO(topatch.read())
         topatch.close()
+        
+        fh = open(os.path.join(self.local_dir,relpath), "wb")
+        rsync.patchstream(readed, fh, delta)
+
         newfile.close()
         fh.close()        
     
@@ -116,9 +119,11 @@ class Sync():
         delta = rsync.rsyncdelta(newfile, hashes)
 
         topatch.seek(0)
-        fh = self.sftp.file(os.path.join(self.remote_dir,relpath), "wb")
-        rsync.patchstream(topatch, fh, delta)
+        readed = StringIO.StringIO(topatch.read())        
         topatch.close()
+        fh = self.sftp.file(os.path.join(self.remote_dir,relpath), "wb")
+        rsync.patchstream(readed, fh, delta)
+
         newfile.close()
         fh.close() 
 
@@ -218,28 +223,24 @@ class Sync():
 
         local_files.update(local_dirs)
         remote_files.update(remote_dirs)
-        #New Local dirs
-#        print '*** listing new local dirs...'
-#        update['update_remote'].extend(list((set(local_dirs) - set(remote_dirs))))
-
+        
         #New Local files
         print '*** listing new local files...'
         update['update_remote'].extend(list((set(local_files) - set(remote_files))))
                     
-        #New Remote dirs
-#        print '*** listing new remote dirs...'
-#        update['update_local'].extend(list((set(remote_dirs) - set(local_dirs))))
-
         #New Remote files
         print '*** listing new remote files...'
         update['update_local'].extend(list((set(remote_files) - set(local_files))))
 
+        print 'DEBUG : New remote files :',update['update_local']
+        
         #Check modified files
         print '*** listing modified files...'
         for relpath in set(remote_files).intersection(local_files):
             if local_files[relpath] > remote_files[relpath]:
                 update['update_remote'].append(relpath)
             elif local_files[relpath] < remote_files[relpath]:
+                print 'DEBUG : New remote file : %s : %s < %s'  (relpath,unicode(local_files[relpath]), unicode(remote_files[relpath]))
                 update['update_local'].append(relpath)
 
         #Sorting update
@@ -254,8 +255,7 @@ class Sync():
     def sync(self):
         self.sftp = self.client.open_sftp()
         update = self.buildUpdate()
-
-        print update
+        self.errors = {}
 
         print '*** Deleting remote files and dirs...'        
         for relpath in update['delete_remote']:
@@ -272,6 +272,7 @@ class Sync():
                 os.remove(os.path.join(self.local_dir,relpath))
                 
         print '*** Uploading local files and dirs...'        
+        self.errors['upload'] = []
         for relpath in update['update_remote']:
             try:
                 print 'DEBUG : Uploading : ', relpath
@@ -301,9 +302,10 @@ class Sync():
                     utime=os.path.getmtime(os.path.join(self.local_dir,relpath))
                     self.sftp.utime(os.path.join(self.remote_dir,relpath),(utime,utime))
             except IOError,err:
-                self.errors['upload'].append(err.msg)
+                self.errors['upload'].append('%s : %s' % (relpath,unicode(err)))
                 
         print '*** Downloading local files and dirs...'   
+        self.errors['download'] = []        
         for relpath in update['update_local']:
             try:
                 print 'DEBUG : Downloading : ', relpath
@@ -332,59 +334,8 @@ class Sync():
                     utime=self.sftp.lstat(os.path.join(self.remote_dir, relpath)).st_mtime
                     os.utime(os.path.join(self.local_dir,relpath),(utime,utime))
             except IOError,err:
-                self.errors['download'].append(err.msg)
-
-                
-#        try:
-#
-#            #Check new local dirs
-#            print '*** Checking new local dirs...'
-#            new_local = list((set(local_dirs) - set(remote_dirs)))
-#            new_local.sort()
-#            for relpath in new_local:
-#                self.sftp.mkdir(os.path.join(self.remote_dir,relpath))
-#                self.sftp.utime(os.path.join(self.remote_dir,relpath),(local_dirs[relpath],local_dirs[relpath]))
-#            del new_local
-#
-#            #Check new remote dirs
-#            print '*** Checking new remote dirs...'
-#            new_remote = list((set(remote_dirs) - set(local_dirs)))
-#            new_remote.sort()
-#            for relpath in new_remote:
-#                print 'Creating local dir %s' % (relpath)
-#                os.makedirs(os.path.join(self.local_dir,relpath))
-#                os.utime(os.path.join(self.local_dir,relpath),(remote_dirs[relpath],remote_dirs[relpath]))
-#
-#
-#            #Check new remote files
-#            print '*** Checking new remote files...'
-#            for relpath in (set(remote_files) - set(local_files)):
-#                self.sftp.get(os.path.join(self.remote_dir,relpath),os.path.join(self.local_dir,relpath))
-#                os.utime(os.path.join(self.local_dir,relpath),(remote_files[relpath],remote_files[relpath]))
-#
-#            #Check new local files
-#            print '*** Checking new local files...'
-#            for relpath in (set(local_files) - set(remote_files)):
-#                print 'Uploading %s to %s' % (relpath,os.path.join(self.remote_dir,relpath))
-#                self.sftp.put(os.path.join(self.local_dir,relpath),os.path.join(self.remote_dir,relpath))
-#                self.sftp.utime(os.path.join(self.remote_dir,relpath),(local_files[relpath],local_files[relpath]))
-#
-            #Check modified files
-#            print '*** Checking modified files...'
-#            for relpath in set(remote_files).intersection(local_files):
-#                if local_files[relpath] > remote_files[relpath]:
-#                    print 'RSync upload %s' % (relpath)                    
-#                    self.patch_to_server(relpath)
-#                    self.sftp.utime(os.path.join(self.remote_dir,relpath),(local_files[relpath],local_files[relpath]))
-#    
-#                elif local_files[relpath] < remote_files[relpath]:
-#                    print 'Rsync download %s' % (relpath)
-#                    self.patch_from_server(relpath)
-#                    os.utime(os.path.join(self.local_dir,relpath),(remote_files[relpath],remote_files[relpath]))
-#    
-#                else:
-#                    print 'Same %s' % (relpath,)
-                
+                self.errors['download'].append('%s : %s' % (relpath,unicode(err)))
+               
         #Write remote last synced files
         print '*** Writing remote last synced dirs and files...'
         remote_files = {}
@@ -412,8 +363,6 @@ class Sync():
         with open(os.path.join(self.local_dir,'.khtsync') ,'wb') as fh:
             pickle.dump((local_files,local_dirs),fh)
         
-#        except:
-#            raise
 
 if __name__ == '__main__':
     if len(sys.argv)<7:
