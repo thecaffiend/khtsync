@@ -117,7 +117,9 @@ class Sync():
         topatch.seek(0)
         fh = self.sftp.file(os.path.join(self.remote_dir,relpath), "wb")
         rsync.patchstream(topatch, fh, delta)
-        
+        topatch.close()
+        newfile.close()
+        fh.close() 
 
     def buildUpdate(self):
         update = {}
