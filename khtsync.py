@@ -8,6 +8,7 @@ from __future__ import with_statement
 """ Sync two folder over ssh """
 
 #TODO
+#Add errors managment
 #Implement unit test
 
 import os
@@ -272,61 +273,66 @@ class Sync():
                 
         print '*** Uploading local files and dirs...'        
         for relpath in update['update_remote']:
-            print 'DEBUG : Uploading : ', relpath
-            if os.path.isdir(os.path.join(self.local_dir,relpath)):
-                if self.exists(os.path.join(self.remote_dir,relpath)): #Already exists
-                    if not self.isdir(os.path.join(self.remote_dir,relpath)): #Old as a file
-                        self.sftp.remove(os.path.join(self.remote_dir,relpath))
+            try:
+                print 'DEBUG : Uploading : ', relpath
+                if os.path.isdir(os.path.join(self.local_dir,relpath)):
+                    if self.exists(os.path.join(self.remote_dir,relpath)): #Already exists
+                        if not self.isdir(os.path.join(self.remote_dir,relpath)): #Old as a file
+                            self.sftp.remove(os.path.join(self.remote_dir,relpath))
+                            print 'Debug sftp.mkdir ',os.path.join(self.remote_dir,relpath)
+                            self.sftp.mkdir(os.path.join(self.remote_dir,relpath))
+                        utime=os.path.getmtime(os.path.join(self.local_dir,relpath))
+                        self.sftp.utime(os.path.join(self.remote_dir,relpath),(utime,utime))
+                    else:
                         print 'Debug sftp.mkdir ',os.path.join(self.remote_dir,relpath)
                         self.sftp.mkdir(os.path.join(self.remote_dir,relpath))
-                    utime=os.path.getmtime(os.path.join(self.local_dir,relpath))
-                    self.sftp.utime(os.path.join(self.remote_dir,relpath),(utime,utime))
+                        utime=os.path.getmtime(os.path.join(self.local_dir,relpath))
+                        self.sftp.utime(os.path.join(self.remote_dir,relpath),(utime,utime))
                 else:
-                    print 'Debug sftp.mkdir ',os.path.join(self.remote_dir,relpath)
-                    self.sftp.mkdir(os.path.join(self.remote_dir,relpath))
-                    utime=os.path.getmtime(os.path.join(self.local_dir,relpath))
-                    self.sftp.utime(os.path.join(self.remote_dir,relpath),(utime,utime))
-            else:
-                if self.exists(os.path.join(self.remote_dir,relpath)):
-                    if self.isdir(os.path.join(self.remote_dir,relpath)):
-                        self.sftp.rmdir(os.path.join(self.remote_dir,relpath))
-                        self.sftp.put(os.path.join(self.local_dir,relpath),os.path.join(self.remote_dir,relpath))
+                    if self.exists(os.path.join(self.remote_dir,relpath)):
+                        if self.isdir(os.path.join(self.remote_dir,relpath)):
+                            self.sftp.rmdir(os.path.join(self.remote_dir,relpath))
+                            self.sftp.put(os.path.join(self.local_dir,relpath),os.path.join(self.remote_dir,relpath))
+                        else:
+                            self.patch_to_server(relpath)
                     else:
-                        self.patch_to_server(relpath)
-                else:
-                    print 'Debug put ',os.path.join(self.local_dir,relpath),os.path.join(self.remote_dir,relpath)
-                    self.sftp.put(os.path.join(self.local_dir,relpath),os.path.join(self.remote_dir,relpath))
-                utime=os.path.getmtime(os.path.join(self.local_dir,relpath))
-                self.sftp.utime(os.path.join(self.remote_dir,relpath),(utime,utime))
-                                    
-        print '*** Downloading local files and dirs...'        
-        for relpath in update['update_local']:
-            print 'DEBUG : Downloading : ', relpath
-            if self.isdir(os.path.join(self.remote_dir,relpath)):
-                if os.path.exists(os.path.join(self.local_dir,relpath)): #Already exists
-                    if not os.path.isdir(os.path.join(self.local_dir,relpath)): #Old as a file:
-                        os.remove(os.path.join(self.local_dir,relpath))
+                        print 'Debug put ',os.path.join(self.local_dir,relpath),os.path.join(self.remote_dir,relpath)
+                        self.sftp.put(os.path.join(self.local_dir,relpath),os.path.join(self.remote_dir,relpath))
+                    utime=os.path.getmtime(os.path.join(self.local_dir,relpath))
+                    self.sftp.utime(os.path.join(self.remote_dir,relpath),(utime,utime))
+        except IOError,err:
+            self.errors['upload'].append(err.msg)
+                
+        print '*** Downloading local files and dirs...'   
+        try:
+            for relpath in update['update_local']:
+                print 'DEBUG : Downloading : ', relpath
+                if self.isdir(os.path.join(self.remote_dir,relpath)):
+                    if os.path.exists(os.path.join(self.local_dir,relpath)): #Already exists
+                        if not os.path.isdir(os.path.join(self.local_dir,relpath)): #Old as a file:
+                            os.remove(os.path.join(self.local_dir,relpath))
+                            print 'Debug mkdir ',os.path.join(self.remote_dir,relpath)
+                            os.mkdir(os.path.join(self.local_dir,relpath))
+                        utime=self.sftp.lstat(os.path.join(self.remote_dir, relpath)).st_mtime
+                        os.utime(os.path.join(self.local_dir,relpath),(utime,utime))
+                    else:
                         print 'Debug mkdir ',os.path.join(self.remote_dir,relpath)
                         os.mkdir(os.path.join(self.local_dir,relpath))
-                    utime=self.sftp.lstat(os.path.join(self.remote_dir, relpath)).st_mtime
-                    os.utime(os.path.join(self.local_dir,relpath),(utime,utime))
+                        utime=self.sftp.lstat(os.path.join(self.remote_dir, relpath)).st_mtime
+                        os.utime(os.path.join(self.local_dir,relpath),(utime,utime))
                 else:
-                    print 'Debug mkdir ',os.path.join(self.remote_dir,relpath)
-                    os.mkdir(os.path.join(self.local_dir,relpath))
-                    utime=self.sftp.lstat(os.path.join(self.remote_dir, relpath)).st_mtime
-                    os.utime(os.path.join(self.local_dir,relpath),(utime,utime))
-            else:
-                if os.path.exists(os.path.join(self.local_dir,relpath)):
-                    if os.path.isdir(os.path.join(self.local_dir,relpath)):
-                        os.rmdir(os.path.join(self.local_dir,relpath))
-                        self.sftp.get(os.path.join(self.remote_dir,relpath),os.path.join(self.local_dir,relpath))
+                    if os.path.exists(os.path.join(self.local_dir,relpath)):
+                        if os.path.isdir(os.path.join(self.local_dir,relpath)):
+                            os.rmdir(os.path.join(self.local_dir,relpath))
+                            self.sftp.get(os.path.join(self.remote_dir,relpath),os.path.join(self.local_dir,relpath))
+                        else:
+                            self.patch_from_server(relpath)
                     else:
-                        self.patch_from_server(relpath)
-                else:
-                    self.sftp.get(os.path.join(self.remote_dir,relpath),os.path.join(self.local_dir,relpath))
-                utime=self.sftp.lstat(os.path.join(self.remote_dir, relpath)).st_mtime
-                os.utime(os.path.join(self.local_dir,relpath),(utime,utime))
-
+                        self.sftp.get(os.path.join(self.remote_dir,relpath),os.path.join(self.local_dir,relpath))
+                    utime=self.sftp.lstat(os.path.join(self.remote_dir, relpath)).st_mtime
+                    os.utime(os.path.join(self.local_dir,relpath),(utime,utime))
+        except IOError,err:
+            self.errors['download'].append(err.msg)
 
                 
 #        try:
@@ -417,3 +423,5 @@ if __name__ == '__main__':
         s.connect()
         s.sync()
         s.close()
+        print "Error occurs while uploading : ", s.errors['upload']
+        print "Error occurs while downloading : ", s.errors['download']
