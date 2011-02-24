@@ -272,6 +272,7 @@ class Sync():
                 
         print '*** Uploading local files and dirs...'        
         for relpath in update['update_remote']:
+            print 'DEBUG : Uploading : ', relpath
             if os.path.isdir(os.path.join(self.local_dir,relpath)):
                 if self.exists(os.path.join(self.remote_dir,relpath)): #Old as a file
                     if not self.isdir(os.path.join(self.remote_dir,relpath)): #Old as a file
@@ -299,6 +300,7 @@ class Sync():
                                     
         print '*** Downloading local files and dirs...'        
         for relpath in update['update_local']:
+            print 'DEBUG : Downloading : ', relpath
             if self.isdir(os.path.join(self.remote_dir,relpath)):
                 if os.path.exists(os.path.join(self.local_dir,relpath)): #Old as a file
                     if not os.path.isdir(os.path.join(self.local_dir,relpath)): #Old as a file:
