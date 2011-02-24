@@ -82,17 +82,16 @@ class Sync():
         return True
 
     def list_all(self, curr_path, remote_files, remote_dirs):
-        dirlist = self.sftp.listdir(curr_path)
+        dirlist = self.sftp.listdir_attr(curr_path)
         for curr_file in dirlist:
-            relpath = relpth.relpath(self.remote_dir,os.path.join(curr_path, curr_file))
-            if self.isdir(os.path.join(curr_path, curr_file)):
-                remote_dirs[relpath] = self.sftp.lstat(os.path.join(curr_path, curr_file)).st_mtime
+            relpath = relpth.relpath(self.remote_dir,os.path.join(curr_path, curr_file.filename))
+            if self.isdir(os.path.join(curr_path, curr_file.filename)):
+                remote_dirs[relpath] = curr_file.st_mtime
                 self.list_all(os.path.join(curr_path,
-                        curr_file), remote_files,remote_dirs)
+                        curr_file.filename), remote_files,remote_dirs)
             else:
-                remote_files[relpath] = \
-                self.sftp.lstat(os.path.join(curr_path, curr_file)).st_mtime
-
+                remote_files[relpath] = curr_file.st_mtime
+                
     def patch_from_server(self,relpath):
         topatch = open(os.path.join(self.local_dir,relpath), "rb")
         hashes = rsync.blockchecksums(topatch)
@@ -237,10 +236,11 @@ class Sync():
         #Check modified files
         print '*** listing modified files...'
         for relpath in set(remote_files).intersection(local_files):
-            if local_files[relpath] > remote_files[relpath]:
+            if (local_files[relpath] - remote_files[relpath]) > 1:
+                print 'DEBUG : Modified local file : %s : %s < %s' % (relpath,unicode(local_files[relpath]), unicode(remote_files[relpath]))
                 update['update_remote'].append(relpath)
-            elif local_files[relpath] < remote_files[relpath]:
-                print 'DEBUG : New remote file : %s : %s < %s'  (relpath,unicode(local_files[relpath]), unicode(remote_files[relpath]))
+            elif (remote_files[relpath] - local_files[relpath]) > 1:
+                print 'DEBUG : Modified remote file : %s : %s < %s' % (relpath,unicode(local_files[relpath]), unicode(remote_files[relpath]))
                 update['update_local'].append(relpath)
 
         #Sorting update
@@ -372,5 +372,7 @@ if __name__ == '__main__':
         s.connect()
         s.sync()
         s.close()
-        print "Error occurs while uploading : ", s.errors['upload']
-        print "Error occurs while downloading : ", s.errors['download']
+        if len(s.errors['upload'])>0:
+            print "Error occurs while uploading : ", s.errors['upload']
+        if len(s.errors['download'])>0:
+            print "Error occurs while downloading : ", s.errors['download']
