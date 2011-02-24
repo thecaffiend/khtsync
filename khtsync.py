@@ -179,7 +179,7 @@ class Sync():
         alist = list(set(old_local_files) - set(local_files))
         for relpath in alist:
             if relpath in remote_files:
-                if old_local_dirs[relpath]>=remote_files[relpath]:
+                if old_local_files[relpath]>=remote_files[relpath]:
                     update['delete_remote'].append(relpath)
             if relpath in remote_dirs:
                 if old_local_files[relpath]>=remote_dirs[relpath]:
@@ -189,7 +189,7 @@ class Sync():
         alist = list(set(old_local_dirs) - set(local_dirs))
         for relpath in alist:
             if relpath in remote_files:
-                if old_local_files[relpath]>=remote_files[relpath]:
+                if old_local_dirs[relpath]>=remote_files[relpath]:
                     update['delete_remote'].append(relpath)
             if relpath in remote_dirs:
                 if old_local_dirs[relpath]>=remote_dirs[relpath]:
@@ -202,14 +202,14 @@ class Sync():
                 if old_remote_files[relpath]>=local_files[relpath]:
                     update['delete_local'].append(relpath)
             if relpath in local_dirs:
-                if old_remote_dirs[relpath]>=local_dirs[relpath]:
+                if old_remote_files[relpath]>=local_dirs[relpath]:
                     update['delete_local'].append(relpath)
 
         #Deleted remote dirs
         alist = list(set(old_remote_dirs) - set(remote_dirs))
         for relpath in alist:
             if relpath in local_files:
-                if old_local_remote[relpath]>=local_files[relpath]:
+                if old_remote_dirs[relpath]>=local_files[relpath]:
                     update['delete_local'].append(relpath)
             if relpath in local_dirs:
                 if old_remote_dirs[relpath]>=local_dirs[relpath]:
