@@ -300,12 +300,12 @@ class Sync():
                         self.sftp.put(os.path.join(self.local_dir,relpath),os.path.join(self.remote_dir,relpath))
                     utime=os.path.getmtime(os.path.join(self.local_dir,relpath))
                     self.sftp.utime(os.path.join(self.remote_dir,relpath),(utime,utime))
-        except IOError,err:
-            self.errors['upload'].append(err.msg)
+            except IOError,err:
+                self.errors['upload'].append(err.msg)
                 
         print '*** Downloading local files and dirs...'   
-        try:
-            for relpath in update['update_local']:
+        for relpath in update['update_local']:
+            try:
                 print 'DEBUG : Downloading : ', relpath
                 if self.isdir(os.path.join(self.remote_dir,relpath)):
                     if os.path.exists(os.path.join(self.local_dir,relpath)): #Already exists
@@ -331,8 +331,8 @@ class Sync():
                         self.sftp.get(os.path.join(self.remote_dir,relpath),os.path.join(self.local_dir,relpath))
                     utime=self.sftp.lstat(os.path.join(self.remote_dir, relpath)).st_mtime
                     os.utime(os.path.join(self.local_dir,relpath),(utime,utime))
-        except IOError,err:
-            self.errors['download'].append(err.msg)
+            except IOError,err:
+                self.errors['download'].append(err.msg)
 
                 
 #        try:
