@@ -197,7 +197,7 @@ class Sync():
         alist = list(set(old_remote_objs) - set(remote_objs))
         for relpath in alist:
             if relpath in local_objs:
-                if old_remote_files[relpath]>=local_files[relpath]:
+                if old_remote_objs[relpath]>=local_objs[relpath]:
                     update['delete_local'].append(relpath)
         
         #New Local files
@@ -218,11 +218,11 @@ class Sync():
 
         for relpath in set(remote_objs).intersection(local_objs):
             if (local_objs[relpath] - remote_objs[relpath]) > 1:
-                logging.debug('*** Modified local file : %s : %s < %s' % (relpath,unicode(local_files[relpath]), unicode(remote_files[relpath])))
+                logging.debug('*** Modified local file : %s : %s < %s' % (relpath,unicode(local_objs[relpath]), unicode(remote_objs[relpath])))
 #                print 'DEBUG : Modified local file : %s : %s < %s' % (relpath,unicode(local_files[relpath]), unicode(remote_files[relpath]))
                 update['update_remote'].append(relpath)
             elif (remote_objs[relpath] - local_objs[relpath]) > 1:
-                logging.debug('*** Modified remote file : %s : %s < %s' % (relpath,unicode(local_files[relpath]), unicode(remote_files[relpath])))
+                logging.debug('*** Modified remote file : %s : %s < %s' % (relpath,unicode(local_objs[relpath]), unicode(remote_objs[relpath])))
 #                print 'DEBUG : Modified remote file : %s : %s < %s' % (relpath,unicode(local_files[relpath]), unicode(remote_files[relpath]))
                 update['update_local'].append(relpath)
 

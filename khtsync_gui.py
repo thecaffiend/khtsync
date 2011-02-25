@@ -214,6 +214,7 @@ class KhtSettings(QMainWindow):
             self.settings.setValue("local_dir", account.local_dir )
             self.settings.setValue("remote_dir", account.remote_dir )
         self.settings.endArray()
+        self.settings.sync()
      
     def closeEvent(self,widget,*args):
         self.savePrefs()
@@ -290,10 +291,11 @@ class KhtSettings(QMainWindow):
         self.accounts[index].hostname = hostname
         self.accounts[index].username = username
         self.accounts[index].port = port
-        self.accounts[index].username = username
+        self.accounts[index].password = password
         self.accounts[index].local_dir = local_dir
         self.accounts[index].remote_dir = remote_dir
         self.accounts_model.set(self.accounts)
+        self.savePrefs()
         
 if __name__ == '__main__':
     import sys
