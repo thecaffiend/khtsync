@@ -32,7 +32,9 @@ from PyQt4.QtGui import QMainWindow, \
     QHBoxLayout, \
     QLayout, \
     QListView, \
-    QAbstractItemView
+    QAbstractItemView, \
+    QMenu, \
+    QIcon
     
     
 from PyQt4.QtCore import QSettings, \
@@ -172,8 +174,9 @@ class KhtSettings(QMainWindow):
         
         self.setupGUI()        
         self.loadPrefs()
+        self.setupMenu()
         self.accounts_model.set(self.accounts)
-        self.show()
+        self.show()        
 
     def isRunning(self):
         return os.path.isfile('/tmp/khtsync.pid')
@@ -296,6 +299,86 @@ class KhtSettings(QMainWindow):
         self.accounts[index].remote_dir = remote_dir
         self.accounts_model.set(self.accounts)
         self.savePrefs()
+
+    def setupMenu(self):
+        helpMenu =  QMenu(self.tr("&Help"), self)
+        self.menuBar().addMenu(helpMenu)
+        helpMenu.addAction(self.tr("&About"), self.do_about)
+
+    def do_about(self):
+        self.about_win = KhtEditorAbout(self)
+
+class KhtEditorAbout( QMainWindow):
+    '''About Window'''
+    def __init__(self, parent=None):
+        QMainWindow.__init__(self,parent)
+        self.parent = parent
+
+        self.settings =  QSettings()
+
+        try:
+            self.setAttribute(Qt.WA_Maemo5AutoOrientation, True)
+            self.setAttribute(Qt.WA_Maemo5StackedWindow, True)
+            isMAEMO = True
+        except:
+            isMAEMO = False
+        self.setWindowTitle("KhtSync About")
+        
+        #Resize window if not maemo
+        if not isMAEMO:
+            self.resize(800, 600)        
+
+        aboutScrollArea =  QScrollArea(self)
+        aboutScrollArea.setWidgetResizable(True)
+        awidget =  QWidget(aboutScrollArea)
+        awidget.setMinimumSize(480,600)
+        awidget.setSizePolicy(  QSizePolicy.Expanding,  QSizePolicy.Expanding)
+        aboutScrollArea.setSizePolicy(  QSizePolicy.Expanding,  QSizePolicy.Expanding)
+        #Kinetic scroller is available on Maemo and should be on meego
+        try:
+            scroller = aboutScrollArea.property("kineticScroller") #.toPyObject()
+            scroller.setEnabled(True)
+        except:
+            pass
+
+        aboutLayout =  QVBoxLayout(awidget)
+
+        aboutIcon =  QLabel()
+        aboutIcon.setPixmap( QIcon.fromTheme('khtsync').pixmap(128,128))
+        aboutIcon.setAlignment( Qt.AlignCenter or Qt.AlignHCenter )
+        aboutIcon.resize(128,128)
+        aboutLayout.addWidget(aboutIcon)
+
+        aboutLabel =  QLabel('''<center><b>KhtSync</b> %s
+                                   <br><br>A tool to sync folder over SSH
+                                   <br>Licenced under GPLv3
+                                   <br>By Beno&icirc;t HERVIER (Khertan) 
+                                   <br><br><br><b>Bugtracker : </b>http://khertan.net/khtsync:bugs
+                                   <br><b>Sources : </b>http://gitorious.org/khtsync                                   
+                                   <br><b>Www : </b>http://khertan.net/khtsync                                   
+                                   </center>''' % __version__)
+
+        aboutLayout.addWidget(aboutLabel)
+        self.bugtracker_button =  QPushButton('BugTracker')
+        self.bugtracker_button.clicked.connect(self.open_bugtracker)
+        self.website_button =  QPushButton('Website')
+        self.website_button.clicked.connect(self.open_website)
+        awidget2 =  QWidget()
+        buttonLayout =  QHBoxLayout(awidget2)        
+        buttonLayout.addWidget(self.bugtracker_button)
+        buttonLayout.addWidget(self.website_button)
+        aboutLayout.addWidget(awidget2)
+        
+        awidget.setLayout(aboutLayout)
+        aboutScrollArea.setWidget(awidget)
+        self.setCentralWidget(aboutScrollArea)
+        self.show()        
+        
+    def open_website(self):
+         QDesktopServices.openUrl( QUrl('http://khertan.net/khtsync'))
+    def open_bugtracker(self):
+         QDesktopServices.openUrl( QUrl('http://khertan.net/khtsync/bugs'))
+
         
 if __name__ == '__main__':
     import sys
