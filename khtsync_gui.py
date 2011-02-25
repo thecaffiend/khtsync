@@ -213,7 +213,7 @@ class KhtSettings(QMainWindow):
             self.settings.setValue("local_dir", account.local_dir )
             self.settings.setValue("remote_dir", account.remote_dir )
         self.settings.endArray()
-         
+     
     def closeEvent(self,widget,*args):
         self.savePrefs()
                      

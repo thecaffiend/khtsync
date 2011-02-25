@@ -12,16 +12,17 @@ from daemon import Daemon
 from PyQt4.QtCore import QSettings
 
 import logging
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s %(levelname)-8s %(message)s',
-                    datefmt='%a, %d %b %Y %H:%M:%S',
-                    filename='/tmp/khtsync.log',
-                    filemode='w')
 
 import khtsync
                     
 class KhtSyncDaemon(Daemon):
     def run(self):
+        logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s %(levelname)-8s %(message)s',
+                    datefmt='%a, %d %b %Y %H:%M:%S',
+                    filename='/tmp/khtsync.log',
+                    filemode='w')
+
         settings = QSettings("Khertan Software", "KhtSync")
         logging.debug('Setting loaded')
         while True:
@@ -44,23 +45,26 @@ class KhtSyncDaemon(Daemon):
                 for index in range(nb_accounts):
                     settings.setArrayIndex(index)
                     try:
+#                        logging.exception('Connecting to %s',str(sync.hostname))
                         sync = khtsync.Sync(hostname=settings.value('hostname'), \
                             port=int(settings.value('port')), \
                             username=settings.value('username'), \
                             password=settings.value('password'), \
                             local_dir=settings.value('local_dir'), \
                             remote_dir=settings.value('remote_dir'))
-                        s.connect()
-                        s.sync()
-                        s.close()
+                        logging.debug('Connecting to %s',str(sync.hostname))
+#                        logging.debug('test')
+                        sync.connect()
+                        sync.sync()
+                        sync.close()
                     except:
-                        settings.exception('Error occur while syncing with %s',str(sync.hostname))
+                        logging.exception('Error occur while syncing with %s',str(sync.hostname))
                 settings.endArray()
                 logging.debug('Finished loop')
                                 
             except Error,err:
-                logging.exception(unicode(err))
-                logging.debug(unicode(err))
+                logging.exception(str(err))
+                logging.debug(str(err))
                         
             time.sleep(refresh_interval)
  
