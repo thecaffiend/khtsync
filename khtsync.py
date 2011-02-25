@@ -5,11 +5,15 @@
 
 from __future__ import with_statement
 
-""" Sync two folder over ssh """
+""" Sync two folder over ssh : Daemon """
+
+__version__ = '0.0.5'
 
 #TODO
-#Add errors managment
-#Implement unit test
+#Add better errors managment
+#Implement better unit test
+
+import logging
 
 import os
 import glob
@@ -22,6 +26,7 @@ import rsync
 import sys
 import shutil
 import new
+import daemon
 
 def _closed(self):
     return self._closed
@@ -46,7 +51,7 @@ class Sync():
         self.client = paramiko.SSHClient()
         self.client.load_system_host_keys()
         self.client.set_missing_host_key_policy(paramiko.WarningPolicy)
-        print '*** Connecting...'
+        logging.debug('Connecting to ' + unicode(self.hostname))
         self.client.connect(self.hostname,
                             self.port,
                             self.username,
@@ -81,16 +86,16 @@ class Sync():
             return False
         return True
 
-    def list_all(self, curr_path, remote_files, remote_dirs):
+    def list_all(self, curr_path, remote_objs):
         dirlist = self.sftp.listdir_attr(curr_path)
         for curr_file in dirlist:
             relpath = relpth.relpath(self.remote_dir,os.path.join(curr_path, curr_file.filename))
             if self.isdir(os.path.join(curr_path, curr_file.filename)):
-                remote_dirs[relpath] = curr_file.st_mtime
+                remote_objs[relpath] = curr_file.st_mtime
                 self.list_all(os.path.join(curr_path,
-                        curr_file.filename), remote_files,remote_dirs)
+                        curr_file.filename), remote_objs)
             else:
-                remote_files[relpath] = curr_file.st_mtime
+                remote_objs[relpath] = curr_file.st_mtime
                 
     def patch_from_server(self,relpath):
         topatch = open(os.path.join(self.local_dir,relpath), "rb")
@@ -134,113 +139,91 @@ class Sync():
         update['update_remote'] = []
                 
         #Load remote last synced file
-        print '*** Loading remote last synced dirs and files...'
-        old_remote_files = {}
-        old_remote_dirs = {}
+        logging.debug('*** Loading remote last synced dirs and files...')
+        old_remote_objs = {}
         if self.exists(os.path.join(self.remote_dir,'.khtsync')):
             try:
                 with self.sftp.file(os.path.join(self.remote_dir,'.khtsync') ,'rb') as fh:
-                    old_remote_files, old_remote_dirs = pickle.load(fh)
+                    old_remote_objs = pickle.load(fh)
+                    if type(old_remote_objs) != dict:
+                        raise
             except:
-                pass
+                old_remote_objs = {}
 
         #Load local last synced file
-        print '*** Loading local last synced dirs and files....'
-        old_local_files = {}
-        old_local_dirs = {}
+        logging.debug('*** Loading local last synced dirs and files....')
+        old_local_objs = {}
         if os.path.exists(os.path.join(self.local_dir,'.khtsync')):
             try:
                 with open(os.path.join(self.local_dir,'.khtsync') ,'rb') as fh:
-                    old_local_files, old_local_dirs = pickle.load(fh)
+                    old_local_objs = pickle.load(fh)
+                    if type(old_local_objs) != dict:
+                        raise
             except:
-                pass
+                old_local_objs = {}
                 
         #List remote files and dirs
-        print '*** Listing remote dirs and files...'
-        remote_files = {}
-        remote_dirs = {}
-        self.list_all(self.remote_dir, remote_files, remote_dirs)
-        if '.khtsync' in remote_files:
-            del remote_files['.khtsync']
+#        print '*** Listing remote dirs and files...'
+        logging.debug('*** Listing remote dirs and files...')
+        remote_objs = {}
+        self.list_all(self.remote_dir, remote_objs)
+        if '.khtsync' in remote_objs:
+            del remote_objs['.khtsync']
     
         #List local files ands dirs
-        print '*** Listing local dirs and files...'
-        local_files = {}
-        local_dirs = {}
+#        print '*** Listing local dirs and files...'
+        local_objs = {}
         for root, dirs, files in os.walk(self.local_dir):
             for afile in files:
                 path = os.path.join(root, afile)
-                local_files[relpth.relpath(self.local_dir,path)] = os.path.getmtime(path)
+                local_objs[relpth.relpath(self.local_dir,path)] = os.path.getmtime(path)
             for dir in dirs:
                 path = os.path.join(root, dir)
-                local_dirs[relpth.relpath(self.local_dir,path)] = os.path.getmtime(path)
+                local_objs[relpth.relpath(self.local_dir,path)] = os.path.getmtime(path)
                 
-        if '.khtsync' in local_files:
-            del local_files['.khtsync']
+        if '.khtsync' in local_objs:
+            del local_objs['.khtsync']
 
-        print '*** listing deleted files and dirs...'
-
-        #Deleted local files
-        alist = list(set(old_local_files) - set(local_files))
+#        print '*** listing deleted files and dirs...'
+        logging.debug('*** listing deleted files and dirs...')
+        #Deleted local objs
+        alist = list(set(old_local_objs) - set(local_objs))
         for relpath in alist:
-            if relpath in remote_files:
-                if old_local_files[relpath]>=remote_files[relpath]:
-                    update['delete_remote'].append(relpath)
-            if relpath in remote_dirs:
-                if old_local_files[relpath]>=remote_dirs[relpath]:
+            if relpath in remote_objs:
+                if old_local_objs[relpath]>=remote_objs[relpath]:
                     update['delete_remote'].append(relpath)
 
-        #Deleted local dirs
-        alist = list(set(old_local_dirs) - set(local_dirs))
+        #Deleted remote objs
+        alist = list(set(old_remote_objs) - set(remote_objs))
         for relpath in alist:
-            if relpath in remote_files:
-                if old_local_dirs[relpath]>=remote_files[relpath]:
-                    update['delete_remote'].append(relpath)
-            if relpath in remote_dirs:
-                if old_local_dirs[relpath]>=remote_dirs[relpath]:
-                    update['delete_remote'].append(relpath)
-
-        #Deleted remote files
-        alist = list(set(old_remote_files) - set(remote_files))
-        for relpath in alist:
-            if relpath in local_files:
+            if relpath in local_objs:
                 if old_remote_files[relpath]>=local_files[relpath]:
                     update['delete_local'].append(relpath)
-            if relpath in local_dirs:
-                if old_remote_files[relpath]>=local_dirs[relpath]:
-                    update['delete_local'].append(relpath)
-
-        #Deleted remote dirs
-        alist = list(set(old_remote_dirs) - set(remote_dirs))
-        for relpath in alist:
-            if relpath in local_files:
-                if old_remote_dirs[relpath]>=local_files[relpath]:
-                    update['delete_local'].append(relpath)
-            if relpath in local_dirs:
-                if old_remote_dirs[relpath]>=local_dirs[relpath]:
-                    update['delete_local'].append(relpath)
-
-        local_files.update(local_dirs)
-        remote_files.update(remote_dirs)
         
         #New Local files
-        print '*** listing new local files...'
-        update['update_remote'].extend(list((set(local_files) - set(remote_files))))
+#        print '*** listing new local files...'
+        logging.debug('*** listing new local files...')
+        update['update_remote'].extend(list((set(local_objs) - set(remote_objs))))
                     
         #New Remote files
-        print '*** listing new remote files...'
-        update['update_local'].extend(list((set(remote_files) - set(local_files))))
+#        print '*** listing new remote files...'
+        logging.debug('*** listing new remote files...')
+        update['update_local'].extend(list((set(remote_objs) - set(local_objs))))
 
-        print 'DEBUG : New remote files :',update['update_local']
+#        print 'DEBUG : New remote files :',update['update_local']
         
         #Check modified files
-        print '*** listing modified files...'
-        for relpath in set(remote_files).intersection(local_files):
-            if (local_files[relpath] - remote_files[relpath]) > 1:
-                print 'DEBUG : Modified local file : %s : %s < %s' % (relpath,unicode(local_files[relpath]), unicode(remote_files[relpath]))
+#        print '*** listing modified files...'
+        logging.debug('*** listing modified files...')
+
+        for relpath in set(remote_objs).intersection(local_objs):
+            if (local_objs[relpath] - remote_objs[relpath]) > 1:
+                logging.debug('*** Modified local file : %s : %s < %s' % (relpath,unicode(local_files[relpath]), unicode(remote_files[relpath])))
+#                print 'DEBUG : Modified local file : %s : %s < %s' % (relpath,unicode(local_files[relpath]), unicode(remote_files[relpath]))
                 update['update_remote'].append(relpath)
-            elif (remote_files[relpath] - local_files[relpath]) > 1:
-                print 'DEBUG : Modified remote file : %s : %s < %s' % (relpath,unicode(local_files[relpath]), unicode(remote_files[relpath]))
+            elif (remote_objs[relpath] - local_objs[relpath]) > 1:
+                logging.debug('*** Modified remote file : %s : %s < %s' % (relpath,unicode(local_files[relpath]), unicode(remote_files[relpath])))
+#                print 'DEBUG : Modified remote file : %s : %s < %s' % (relpath,unicode(local_files[relpath]), unicode(remote_files[relpath]))
                 update['update_local'].append(relpath)
 
         #Sorting update
@@ -250,129 +233,141 @@ class Sync():
         update['delete_remote'].reverse()
         update['update_local'].sort()
         update['update_remote'].sort()
-        return update
+        return (update,local_objs,remote_objs)
                             
     def sync(self):
         self.sftp = self.client.open_sftp()
-        update = self.buildUpdate()
+        update,local_objs,remote_objs = self.buildUpdate()
         self.errors = {}
 
-        print '*** Deleting remote files and dirs...'        
+#        print '*** Deleting remote files and dirs...'  
+        logging.debug('*** Deleting remote files and dirs...')
         for relpath in update['delete_remote']:
             if self.isdir(os.path.join(self.remote_dir,relpath)):
                 self.sftp.rmdir(os.path.join(self.remote_dir,relpath))
+                del remote_objs[relpath]
             else:
                 self.sftp.remove(os.path.join(self.remote_dir,relpath))
+                del remote_objs[relpath]
 
-        print '*** Deleting local files and dirs...'        
+#        print '*** Deleting local files and dirs...'  
+        logging.debug('*** Deleting local files and dirs...')
         for relpath in update['delete_local']:
             if os.path.isdir(os.path.join(self.local_dir,relpath)):
                 os.rmdir(os.path.join(self.local_dir,relpath))
+                del local_objs[relpath]
             else:
                 os.remove(os.path.join(self.local_dir,relpath))
+                del local_objs[relpath]
                 
-        print '*** Uploading local files and dirs...'        
+#        print '*** Uploading local files and dirs...'      
+        logging.debug('*** Uploading local files and dirs...')  
         self.errors['upload'] = []
         for relpath in update['update_remote']:
             try:
-                print 'DEBUG : Uploading : ', relpath
+#                print 'DEBUG : Uploading : ', relpath
+                logging.debug('*** Uploading : %s' % relpath)  
                 if os.path.isdir(os.path.join(self.local_dir,relpath)):
                     if self.exists(os.path.join(self.remote_dir,relpath)): #Already exists
                         if not self.isdir(os.path.join(self.remote_dir,relpath)): #Old as a file
                             self.sftp.remove(os.path.join(self.remote_dir,relpath))
-                            print 'Debug sftp.mkdir ',os.path.join(self.remote_dir,relpath)
+#                           print 'Debug sftp.mkdir ',os.path.join(self.remote_dir,relpath)
+                            logging.debug('*** sftp.mkdir : %s' % os.path.join(self.remote_dir,relpath))  
                             self.sftp.mkdir(os.path.join(self.remote_dir,relpath))
                         utime=os.path.getmtime(os.path.join(self.local_dir,relpath))
                         self.sftp.utime(os.path.join(self.remote_dir,relpath),(utime,utime))
+                        remote_objs[relpath]=utime
                     else:
-                        print 'Debug sftp.mkdir ',os.path.join(self.remote_dir,relpath)
+#                        print 'Debug sftp.mkdir ',os.path.join(self.remote_dir,relpath)
+                        logging.debug('*** sftp.mkdir : %s' % os.path.join(self.remote_dir,relpath))
                         self.sftp.mkdir(os.path.join(self.remote_dir,relpath))
                         utime=os.path.getmtime(os.path.join(self.local_dir,relpath))
                         self.sftp.utime(os.path.join(self.remote_dir,relpath),(utime,utime))
+                        remote_objs[relpath]=utime
                 else:
                     if self.exists(os.path.join(self.remote_dir,relpath)):
                         if self.isdir(os.path.join(self.remote_dir,relpath)):
+                            logging.debug('*** sftp.rmdir : %s' % os.path.join(self.remote_dir,relpath))
                             self.sftp.rmdir(os.path.join(self.remote_dir,relpath))
+                            logging.debug('*** put : %s' % os.path.join(self.local_dir,relpath))
                             self.sftp.put(os.path.join(self.local_dir,relpath),os.path.join(self.remote_dir,relpath))
                         else:
                             self.patch_to_server(relpath)
                     else:
-                        print 'Debug put ',os.path.join(self.local_dir,relpath),os.path.join(self.remote_dir,relpath)
+#                        print 'Debug put ',os.path.join(self.local_dir,relpath),os.path.join(self.remote_dir,relpath)
+                        logging.debug('put %s' % os.path.join(self.local_dir,relpath),os.path.join(self.remote_dir,relpath))
                         self.sftp.put(os.path.join(self.local_dir,relpath),os.path.join(self.remote_dir,relpath))
                     utime=os.path.getmtime(os.path.join(self.local_dir,relpath))
                     self.sftp.utime(os.path.join(self.remote_dir,relpath),(utime,utime))
+                    remote_objs[relpath]=utime
             except IOError,err:
                 self.errors['upload'].append('%s : %s' % (relpath,unicode(err)))
                 
-        print '*** Downloading local files and dirs...'   
+#        print '*** Downloading local files and dirs...'   
         self.errors['download'] = []        
         for relpath in update['update_local']:
             try:
-                print 'DEBUG : Downloading : ', relpath
+#                print 'DEBUG : Downloading : ', relpath
                 if self.isdir(os.path.join(self.remote_dir,relpath)):
                     if os.path.exists(os.path.join(self.local_dir,relpath)): #Already exists
                         if not os.path.isdir(os.path.join(self.local_dir,relpath)): #Old as a file:
+                            logging.debug('remove %s' % os.path.join(self.local_dir,relpath))
                             os.remove(os.path.join(self.local_dir,relpath))
-                            print 'Debug mkdir ',os.path.join(self.remote_dir,relpath)
+#                            print 'Debug mkdir ',os.path.join(self.remote_dir,relpath)
+                            
+                            logging.debug('mkdir %s' % os.path.join(self.local_dir,relpath))
                             os.mkdir(os.path.join(self.local_dir,relpath))
                         utime=self.sftp.lstat(os.path.join(self.remote_dir, relpath)).st_mtime
                         os.utime(os.path.join(self.local_dir,relpath),(utime,utime))
+                        local_objs[relpath]=utime
                     else:
-                        print 'Debug mkdir ',os.path.join(self.remote_dir,relpath)
+#                        print 'Debug mkdir ',os.path.join(self.remote_dir,relpath)
+                        logging.debug('mkdir %s' % os.path.join(self.remote_dir,relpath))
                         os.mkdir(os.path.join(self.local_dir,relpath))
+                        logging.debug('mkdir %s' % os.path.join(self.local_dir,relpath))
                         utime=self.sftp.lstat(os.path.join(self.remote_dir, relpath)).st_mtime
                         os.utime(os.path.join(self.local_dir,relpath),(utime,utime))
+                        local_objs[relpath]=utime
                 else:
                     if os.path.exists(os.path.join(self.local_dir,relpath)):
                         if os.path.isdir(os.path.join(self.local_dir,relpath)):
                             os.rmdir(os.path.join(self.local_dir,relpath))
+                            logging.debug('rmdir %s' % os.path.join(self.local_dir,relpath))
                             self.sftp.get(os.path.join(self.remote_dir,relpath),os.path.join(self.local_dir,relpath))
+                            logging.debug('get %s' % os.path.join(self.remote_dir,relpath))
                         else:
                             self.patch_from_server(relpath)
                     else:
                         self.sftp.get(os.path.join(self.remote_dir,relpath),os.path.join(self.local_dir,relpath))
+                        logging.debug('get %s' % os.path.join(self.remote_dir,relpath))
                     utime=self.sftp.lstat(os.path.join(self.remote_dir, relpath)).st_mtime
                     os.utime(os.path.join(self.local_dir,relpath),(utime,utime))
+                    local_objs[relpath]=utime
             except IOError,err:
                 self.errors['download'].append('%s : %s' % (relpath,unicode(err)))
                
-        #Write remote last synced files
-        print '*** Writing remote last synced dirs and files...'
-        remote_files = {}
-        remote_dirs = {}
-        self.list_all(self.remote_dir, remote_files,remote_dirs)
-        if '.khtsync' in remote_files:
-            del remote_files['.khtsync']
+        if '.khtsync' in remote_objs:
+            del remote_objs['.khtsync']
         fh = self.sftp.file(os.path.join(self.remote_dir,'.khtsync') ,'wb')
-        pickle.dump((remote_files,remote_dirs),fh)
+        pickle.dump(remote_objs,fh)
         fh.close()
 
-        #Write local last synced files
-        print '*** Writing local last synced dirs and files...'
-        local_files = {}
-        local_dirs = {}
-        for root, dirs, files in os.walk(self.local_dir):
-            for afile in files:
-                path = os.path.join(root, afile)
-                local_files[relpth.relpath(self.local_dir,path)] =  os.path.getmtime(path)
-            for dir in dirs:
-                path = os.path.join(root, dir)
-                local_dirs[relpth.relpath(self.local_dir,path)] = os.path.getmtime(path)
-        if '.khtsync' in local_files:
-            del local_files['.khtsync']
+        if '.khtsync' in local_objs:
+            del local_objs['.khtsync']
         with open(os.path.join(self.local_dir,'.khtsync') ,'wb') as fh:
-            pickle.dump((local_files,local_dirs),fh)
+            pickle.dump(local_objs,fh)
         
 
-if __name__ == '__main__':
-    if len(sys.argv)<7:
-        print "Usage : host port login password local_dir remote_dir"
-    else:
-        s = Sync(hostname=sys.argv[1], port=int(sys.argv[2]), username=sys.argv[3], password=sys.argv[4], local_dir=sys.argv[5], remote_dir=sys.argv[6])
-        s.connect()
-        s.sync()
-        s.close()
-        if len(s.errors['upload'])>0:
-            print "Error occurs while uploading : ", s.errors['upload']
-        if len(s.errors['download'])>0:
-            print "Error occurs while downloading : ", s.errors['download']
+# if __name__ == '__main__':
+    # if len(sys.argv)<7:
+        # print "Usage : host port login password local_dir remote_dir"
+    # else:
+       # with daemon.DaemonContext():
+        # s = Sync(hostname=sys.argv[1], port=int(sys.argv[2]), username=sys.argv[3], password=sys.argv[4], local_dir=sys.argv[5], remote_dir=sys.argv[6])
+        # s.connect()
+        # s.sync()
+        # s.close()
+        # if len(s.errors['upload'])>0:
+            # print "Error occurs while uploading : ", s.errors['upload']
+        # if len(s.errors['download'])>0:
+            # print "Error occurs while downloading : ", s.errors['download']
