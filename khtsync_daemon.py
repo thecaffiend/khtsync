@@ -1,5 +1,12 @@
 #!/usr/bin/env python
- 
+# -*- coding: utf-8 -*-
+# Copyright (c) 2010 Benoît HERVIER
+# Licenced under GPLv3
+
+import sip
+sip.setapi('QString', 2)
+sip.setapi('QVariant', 2)
+
 import sys, time
 from daemon import Daemon
 from PyQt4.QtCore import QSettings
@@ -15,7 +22,7 @@ import khtsync
                     
 class KhtSyncDaemon(Daemon):
     def run(self):
-        settings = QSettings("KhtSync", "Khertan Softwares")
+        settings = QSettings("Khertan Software", "KhtSync")
         logging.debug('Setting loaded')
         while True:
             try:
@@ -31,24 +38,29 @@ class KhtSyncDaemon(Daemon):
                     if refresh_interval<600:
                         refresh_interval = 600
                 logging.debug('refresh interval loaded')
-                        
+
                 nb_accounts = settings.beginReadArray('accounts')
+                logging.debug('Found %s account to sync' % (str(nb_accounts),))
                 for index in range(nb_accounts):
                     settings.setArrayIndex(index)
-                    sync = khtsync.Sync(hostname=settings.value('hostname'), \
-                        port=int(settings.value('port')), \
-                        username=settings.value('username'), \
-                        password=settings.value('password'), \
-                        local_dir=settings.value('local_dir'), \
-                        remote_dir=settings.value('remote_dir'))
-                    s.connect()
-                    s.sync()
-                    s.close()   
+                    try:
+                        sync = khtsync.Sync(hostname=settings.value('hostname'), \
+                            port=int(settings.value('port')), \
+                            username=settings.value('username'), \
+                            password=settings.value('password'), \
+                            local_dir=settings.value('local_dir'), \
+                            remote_dir=settings.value('remote_dir'))
+                        s.connect()
+                        s.sync()
+                        s.close()
+                    except:
+                        settings.exception('Error occur while syncing with %s',str(sync.hostname))
                 settings.endArray()
                 logging.debug('Finished loop')
                                 
             except Error,err:
                 logging.exception(unicode(err))
+                logging.debug(unicode(err))
                         
             time.sleep(refresh_interval)
  
