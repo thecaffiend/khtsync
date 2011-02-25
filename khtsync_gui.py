@@ -15,6 +15,7 @@ __version__ = khtsync.__version__
 DAEMON_PATH = '/home/user/MyDocs/Projects/khtsync/khtsync_daemon.py'
 
 import os
+from subprocess import Popen
 
 from PyQt4.QtGui import QMainWindow, \
     QSizePolicy, \
@@ -236,6 +237,7 @@ class KhtSettings(QMainWindow):
         self._main_layout.addWidget(self.daemon_button,gridIndex,0)
 
         self.show_log = QPushButton('Show logs')
+        self.show_log.clicked.connect(self.showlog)
         self._main_layout.addWidget(self.show_log,gridIndex,1)
         gridIndex += 1                
 
@@ -258,6 +260,15 @@ class KhtSettings(QMainWindow):
         
         self.aWidget.setLayout(self._rmain_layout)
         self.setCentralWidget(self.aWidget)
+
+    def showlog(self):
+        import commands
+        fileHandle = open('/tmp/khtsync.sh', 'wb')
+        fileHandle.write('#!/bin/sh\n/usr/bin/tail -f /tmp/khtsync.log\n')
+        fileHandle.close()
+        commands.getoutput("chmod +x /tmp/khtsync.sh")
+        
+        os.system('/usr/bin/osso-xterm /tmp/khtsync.sh')
         
     def add_account(self):
         self.accounts.append(SSHSyncAccount())
