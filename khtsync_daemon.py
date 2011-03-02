@@ -17,10 +17,10 @@ import khtsync
                     
 class KhtSyncDaemon(Daemon):
     def run(self):
-        logging.basicConfig(level=logging.DEBUG,
+        logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(levelname)-8s %(message)s',
                     datefmt='%a, %d %b %Y %H:%M:%S',
-                    filename='/tmp/khtsync.log',
+                    filename='/home/user/.khtsync.log',
                     filemode='w')
 
         settings = QSettings("Khertan Software", "KhtSync")
@@ -41,7 +41,7 @@ class KhtSyncDaemon(Daemon):
                 logging.debug('refresh interval loaded')
 
                 nb_accounts = settings.beginReadArray('accounts')
-                logging.debug('Found %s account to sync' % (str(nb_accounts),))
+                logging.info('Found %s account to sync' % (str(nb_accounts),))
                 for index in range(nb_accounts):
                     settings.setArrayIndex(index)
                     try:
@@ -52,7 +52,7 @@ class KhtSyncDaemon(Daemon):
                             password=settings.value('password'), \
                             local_dir=settings.value('local_dir'), \
                             remote_dir=settings.value('remote_dir'))
-                        logging.debug('Connecting to %s',str(sync.hostname))
+                        logging.info('Connecting to %s',str(sync.hostname))
 #                        logging.debug('test')
                         sync.connect()
                         sync.sync()

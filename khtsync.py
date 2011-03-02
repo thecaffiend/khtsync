@@ -11,6 +11,7 @@ __version__ = '0.0.5'
 
 #TODO
 #Add better errors managment
+#Keep the read/write/execute attributes over sync
 #Implement better unit test
 
 import logging
@@ -27,6 +28,7 @@ import sys
 import shutil
 import new
 import daemon
+import stat
 
 def _closed(self):
     return self._closed
@@ -48,14 +50,18 @@ class Sync():
         self.remote_dir = remote_dir
 
     def connect(self):
-        self.client = paramiko.SSHClient()
-        self.client.load_system_host_keys()
-        self.client.set_missing_host_key_policy(paramiko.WarningPolicy)
-        logging.debug('Connecting to ' + unicode(self.hostname))
-        self.client.connect(self.hostname,
-                            self.port,
-                            self.username,
-                            self.password)
+        try:
+            self.client = paramiko.SSHClient()
+            self.client.load_system_host_keys()
+            self.client.set_missing_host_key_policy(paramiko.WarningPolicy)
+            logging.info('Connecting to ' + unicode(self.hostname))
+            self.client.connect(self.hostname,
+                                self.port,
+                                self.username,
+                                self.password)
+        except paramiko.SSHException:
+            logging.exception('Connection to %s failed.' % self.hostname)
+            raise
 
     def close(self):
         self.client.close()
@@ -75,62 +81,90 @@ class Sync():
         return (status, log_fp.getvalue())
 
     def isdir(self, path):
-        status = self.run('[ -d %s ] || echo "FALSE"' % path)
-        if status[1].startswith('FALSE'):
-            return False
-        return True
+        # status = self.run('[ -d %s ] || echo "FALSE"' % path)
+        # if status[1].startswith('FALSE'):
+            # return False
+        # return True
+        try:
+            statinfo = self.sftp.lstat(path)
+        except IOError, e:
+            if getattr(e,"errno",None) == 2:
+                return False
+            raise
+        return stat.S_ISDIR(statinfo.st_mode)
+
 
     def exists(self, path):
-        status = self.run('[ -a %s ] || echo "FALSE"' % path)
-        if status[1].startswith('FALSE'):
-            return False
+        # status = self.run('[ -a %s ] || echo "FALSE"' % path)
+        # if status[1].startswith('FALSE'):
+            # return False
+        # return True
+        try:
+            self.sftp.lstat(path)
+        except IOError, e:
+            if getattr(e,"errno",None) == 2:
+                return False
+            raise
         return True
-
-    def list_all(self, curr_path, remote_objs):
-        dirlist = self.sftp.listdir_attr(curr_path)
-        for curr_file in dirlist:
-            relpath = relpth.relpath(self.remote_dir,os.path.join(curr_path, curr_file.filename))
-            if self.isdir(os.path.join(curr_path, curr_file.filename)):
-                remote_objs[relpath] = curr_file.st_mtime
-                self.list_all(os.path.join(curr_path,
-                        curr_file.filename), remote_objs)
-            else:
-                remote_objs[relpath] = curr_file.st_mtime
-                
-    def patch_from_server(self,relpath):
-        topatch = open(os.path.join(self.local_dir,relpath), "rb")
-        hashes = rsync.blockchecksums(topatch)
-
-        newfile = self.sftp.file(os.path.join(self.remote_dir,relpath))
-        newfile.closed = new.instancemethod(_closed, newfile, paramiko.SFTPFile)
-        delta = rsync.rsyncdelta(newfile, hashes)
-
-        topatch.seek(0)
-        readed = StringIO.StringIO(topatch.read())
-        topatch.close()
         
-        fh = open(os.path.join(self.local_dir,relpath), "wb")
-        rsync.patchstream(readed, fh, delta)
-
-        newfile.close()
-        fh.close()        
+    def list_all(self, curr_path, remote_objs):
+        try:
+            dirlist = self.sftp.listdir_attr(curr_path)
+            for curr_file in dirlist:
+                relpath = relpth.relpath(self.remote_dir,os.path.join(curr_path, curr_file.filename))
+                if self.isdir(os.path.join(curr_path, curr_file.filename)):
+                    remote_objs[relpath] = curr_file.st_mtime                
+                    self.list_all(os.path.join(curr_path,
+                            curr_file.filename), remote_objs)
+                else:
+                    remote_objs[relpath] = curr_file.st_mtime
+        except IOError, err:
+            logging.info('Cannot read %s ' % curr_path)
+            raise err
+            
+    def patch_from_server(self,relpath):
+        try:
+            topatch = open(os.path.join(self.local_dir,relpath), "rb")
+            hashes = rsync.blockchecksums(topatch)
+    
+            newfile = self.sftp.file(os.path.join(self.remote_dir,relpath))
+            newfile.closed = new.instancemethod(_closed, newfile, paramiko.SFTPFile)
+            delta = rsync.rsyncdelta(newfile, hashes)
+    
+            topatch.seek(0)
+            readed = StringIO.StringIO(topatch.read())
+            topatch.close()
+            
+            fh = open(os.path.join(self.local_dir,relpath), "wb")
+            rsync.patchstream(readed, fh, delta)
+    
+            newfile.close()
+            fh.close()
+ 
+        except IOError, err:
+            logging.info('Cannot patch from server %s : %s' % (relpath,str(err)))
+            raise err
     
     def patch_to_server(self,relpath):
-        topatch = self.sftp.file(os.path.join(self.remote_dir,relpath), "rb")
-        hashes = rsync.blockchecksums(topatch)
-
-        newfile = open(os.path.join(self.local_dir,relpath))
-        delta = rsync.rsyncdelta(newfile, hashes)
-
-        topatch.seek(0)
-        readed = StringIO.StringIO(topatch.read())        
-        topatch.close()
-        fh = self.sftp.file(os.path.join(self.remote_dir,relpath), "wb")
-        rsync.patchstream(readed, fh, delta)
-
-        newfile.close()
-        fh.close() 
-
+        try:
+            topatch = self.sftp.file(os.path.join(self.remote_dir,relpath), "rb")
+            hashes = rsync.blockchecksums(topatch)
+    
+            newfile = open(os.path.join(self.local_dir,relpath))
+            delta = rsync.rsyncdelta(newfile, hashes)
+    
+            topatch.seek(0)
+            readed = StringIO.StringIO(topatch.read())        
+            topatch.close()
+            fh = self.sftp.file(os.path.join(self.remote_dir,relpath), "wb")
+            rsync.patchstream(readed, fh, delta)    
+            newfile.close()
+            fh.close()
+            
+        except IOError, err:
+            logging.info('Cannot patch to server %s : %s' % (relpath,str(err)))
+            raise err
+            
     def buildUpdate(self):
         update = {}
         update['delete_local'] = []
@@ -243,6 +277,8 @@ class Sync():
 #        print '*** Deleting remote files and dirs...'  
         logging.debug('*** Deleting remote files and dirs...')
         for relpath in update['delete_remote']:
+            if not isinstance(relpath,unicode):
+                relpath = relpath.decode('utf-8')
             if self.isdir(os.path.join(self.remote_dir,relpath)):
                 self.sftp.rmdir(os.path.join(self.remote_dir,relpath))
                 del remote_objs[relpath]
@@ -253,6 +289,8 @@ class Sync():
 #        print '*** Deleting local files and dirs...'  
         logging.debug('*** Deleting local files and dirs...')
         for relpath in update['delete_local']:
+            if not isinstance(relpath,unicode):
+                relpath = relpath.decode('utf-8')
             if os.path.isdir(os.path.join(self.local_dir,relpath)):
                 os.rmdir(os.path.join(self.local_dir,relpath))
                 del local_objs[relpath]
@@ -264,6 +302,8 @@ class Sync():
         logging.debug('*** Uploading local files and dirs...')  
         self.errors['upload'] = []
         for relpath in update['update_remote']:
+            if not isinstance(relpath,unicode):
+                relpath = relpath.decode('utf-8')
             try:
 #                print 'DEBUG : Uploading : ', relpath
                 logging.debug('*** Uploading : %s' % relpath)  
@@ -302,10 +342,13 @@ class Sync():
                     remote_objs[relpath]=utime
             except IOError,err:
                 self.errors['upload'].append('%s : %s' % (relpath,unicode(err)))
+                logging.warning('Upload failed %s : %s' % (relpath,str(err))) 
                 
 #        print '*** Downloading local files and dirs...'   
         self.errors['download'] = []        
         for relpath in update['update_local']:
+            if not isinstance(relpath,unicode):
+                relpath = relpath.decode('utf-8')
             try:
 #                print 'DEBUG : Downloading : ', relpath
                 if self.isdir(os.path.join(self.remote_dir,relpath)):
@@ -345,12 +388,16 @@ class Sync():
                     local_objs[relpath]=utime
             except IOError,err:
                 self.errors['download'].append('%s : %s' % (relpath,unicode(err)))
+                logging.warning('Download failed %s : %s' % (relpath,str(err)))             
                
         if '.khtsync' in remote_objs:
             del remote_objs['.khtsync']
-        fh = self.sftp.file(os.path.join(self.remote_dir,'.khtsync') ,'wb')
-        pickle.dump(remote_objs,fh)
-        fh.close()
+        try:
+            fh = self.sftp.file(os.path.join(self.remote_dir,'.khtsync') ,'wb')
+            pickle.dump(remote_objs,fh)
+            fh.close()
+        except IOError,err:
+            logging.warning('You have no access to remote dir, deletion will not work')
 
         if '.khtsync' in local_objs:
             del local_objs['.khtsync']

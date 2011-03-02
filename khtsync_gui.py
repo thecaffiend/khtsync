@@ -248,7 +248,8 @@ class KhtSettings(QMainWindow):
         self._main_layout.addWidget(QLabel('Refresh interval (min)'),gridIndex,0)
 
         self.refresh_interval = QSpinBox()
-        self.refresh_interval.setMinimum(10)
+        self.refresh_interval.setMinimum(5)
+        self.refresh_interval.setMaximum(99999)
         self._main_layout.addWidget(self.refresh_interval,gridIndex,1)
         gridIndex += 1
 
@@ -268,7 +269,7 @@ class KhtSettings(QMainWindow):
     def showlog(self):
         import commands
         fileHandle = open('/tmp/khtsync.sh', 'wb')
-        fileHandle.write('#!/bin/sh\n/usr/bin/tail -f /tmp/khtsync.log\n')
+        fileHandle.write('#!/bin/sh\n/usr/bin/tail -f /home/user/.khtsync.log\n')
         fileHandle.close()
         commands.getoutput("chmod +x /tmp/khtsync.sh")
         

@@ -85,10 +85,10 @@ class TestSync(unittest.TestCase):
         fh = open('/tmp/origin/test_origin','w')
         fh.write('test_origin')
         fh.close()
-        time.sleep(1)
+        time.sleep(2)
         os.mkdir('/tmp/dest/test_origin')
         os.mkdir('/tmp/origin/test_dest')
-        time.sleep(1)
+        time.sleep(2)
         fh = open('/tmp/dest/test_dest','w')
         fh.write('test_dest')
         fh.close()
@@ -102,7 +102,44 @@ class TestSync(unittest.TestCase):
         dest = fh.read()
         fh.close()
         assert hashlib.md5(dest) != hashlib.md5('test_dest') , 'Syncing file to ssh didn work'
-        
+
+
+    def testUtf8FileName(self):
+        global USER
+        global PASSWORD
+        try:
+            shutil.rmtree('/tmp/origin')
+            shutil.rmtree('/tmp/dest')
+        except:
+            pass
+        os.mkdir('/tmp/origin')
+        os.mkdir('/tmp/dest')
+        fh = open('/tmp/origin/test_originé','w')
+        fh.write('test_originé')
+        fh.close()
+        fh = open('/tmp/dest/test_origin§','w')
+        fh.write('test_origin§')
+        fh.close()
+        s = khtsync.Sync('127.0.0.1',22,USER,PASSWORD,local_dir='/tmp/origin',remote_dir='/tmp/dest')
+        s.connect()
+        s.sync()
+        s.close()
+        assert hashlib.md5('/tmp/dest/test_origin§') != hashlib.md5('/tmp/origin/test_origin§') , 'Upload of utf8 differ'
+        assert hashlib.md5('/tmp/dest/test_originé') != hashlib.md5('/tmp/origin/test_originé') , 'Download of utf8 differ'
+        fh = open('/tmp/origin/test_originé','w')
+        fh.write('test_originé')
+        fh.close()
+        fh = open('/tmp/dest/test_origin§','w')
+        fh.write('test_origin§')
+        fh.close()
+        time.sleep(2)
+        s = khtsync.Sync('127.0.0.1',22,USER,PASSWORD,local_dir='/tmp/origin',remote_dir='/tmp/dest')
+        s.connect()
+        s.sync()
+        s.close()
+        assert hashlib.md5('/tmp/dest/test_origin§') != hashlib.md5('/tmp/origin/test_origin§') , 'RSync of utf8 differ'
+        assert hashlib.md5('/tmp/dest/test_originé') != hashlib.md5('/tmp/origin/test_originé') , 'RSync of utf8 differ'
+             
     def testRsyncedFile(self):
         global USER
         global PASSWORD
@@ -145,7 +182,34 @@ class TestSync(unittest.TestCase):
         fh.close()
         assert hashlib.md5(origin_test_origin) != hashlib.md5(dest_test_origin) , 'Rsynced upload differ'
         assert hashlib.md5(origin_test_dest) != hashlib.md5(dest_test_dest) , 'Rsynced download differ'
-                        
+
+    def testRights(self):
+        global USER
+        global PASSWORD
+        try:
+            shutil.rmtree('/tmp/origin')
+            shutil.rmtree('/tmp/dest')
+        except:
+            pass
+        os.mkdir('/tmp/origin')
+        os.mkdir('/tmp/dest')
+        fh = open('/tmp/dest/test_origin','w')
+        fh.write('test_origin2')
+        fh.close()
+        os.chmod('/tmp/dest/test_origin',000)        
+        time.sleep(10) 
+        fh = open('/tmp/origin/test_origin','w')
+        fh.write('test_origin1')
+        fh.close()
+        s = khtsync.Sync('127.0.0.1',22,USER,PASSWORD,local_dir='/tmp/origin',remote_dir='/tmp/dest')
+        s.connect()
+        s.sync()
+        s.close()
+        os.chmod('/tmp/dest/test_origin',777)        
+#        if os.path.isfile(/tmp/dest)
+        assert (os.path.getmtime('/tmp/origin/test_origin')-os.path.getmtime('/tmp/dest/test_origin'))>1, 'Utime should not be modified !'        
+
+        
 if __name__ == "__main__":
     USER = sys.argv[1]
     PASSWORD = sys.argv[2]
