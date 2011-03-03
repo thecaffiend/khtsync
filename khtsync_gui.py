@@ -56,7 +56,9 @@ class AccountDialog(QDialog):
         self.username = QLineEdit(account.username)
         self.username.setInputMethodHints(Qt.ImhNoAutoUppercase)
         self.password = QLineEdit(account.password)
-        self.password.setInputMethodHints(Qt.ImhNoAutoUppercase)
+        self.password.setEchoMode(QLineEdit.Password)
+        self.password.setInputMethodHints(Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase | Qt.ImhHiddenText)
+#        self.password.setInputMethodHints(Qt.ImhHiddenText)
         self.local_dir = QLineEdit(account.local_dir)
         self.local_dir.setInputMethodHints(Qt.ImhNoAutoUppercase)
         self.remote_dir = QLineEdit(account.remote_dir)
@@ -78,7 +80,7 @@ class AccountDialog(QDialog):
         gridLayout.addWidget(self.username, 2, 1)
 
         gridLayout.addWidget(QLabel('Password'), 3, 0)
-        gridLayout.addWidget(self.password, 3, 1)
+        gridLayout.addWidget(self.password, 3, 1)        
 
         gridLayout.addWidget(QLabel('Local dir'), 4, 0)
         gridLayout.addWidget(self.local_dir, 4, 1)
