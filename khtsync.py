@@ -7,7 +7,7 @@ from __future__ import with_statement
 
 """ Sync two folder over ssh : Daemon """
 
-__version__ = '0.0.5'
+__version__ = '0.1.0'
 
 #TODO
 #Add better errors managment
@@ -281,10 +281,10 @@ class Sync():
                 relpath = relpath.decode('utf-8')
             if self.isdir(os.path.join(self.remote_dir,relpath)):
                 self.sftp.rmdir(os.path.join(self.remote_dir,relpath))
-                del remote_objs[relpath]
+#                del remote_objs[relpath] Keep deleted obj for multisync
             else:
                 self.sftp.remove(os.path.join(self.remote_dir,relpath))
-                del remote_objs[relpath]
+#                del remote_objs[relpath] Keep deleted obj for multisync
 
 #        print '*** Deleting local files and dirs...'  
         logging.debug('*** Deleting local files and dirs...')
@@ -293,10 +293,10 @@ class Sync():
                 relpath = relpath.decode('utf-8')
             if os.path.isdir(os.path.join(self.local_dir,relpath)):
                 os.rmdir(os.path.join(self.local_dir,relpath))
-                del local_objs[relpath]
+#                del local_objs[relpath] Keep deleted obj for multisync
             else:
                 os.remove(os.path.join(self.local_dir,relpath))
-                del local_objs[relpath]
+#                del local_objs[relpath] Keep deleted obj for multisync
                 
 #        print '*** Uploading local files and dirs...'      
         logging.debug('*** Uploading local files and dirs...')  
