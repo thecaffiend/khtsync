@@ -40,8 +40,13 @@ def relpath(base_path,target):
     Base can be a directory specified either as absolute or relative
     to current directory."""
 
-    base_path = normcase(abspath(normpath(base_path)))
-    target = normcase(abspath(normpath(target)))
+    # changing case here was causing issues. local_objs in khtsync had all 
+    # lowercase names, which was a problem when the selected file syncing was
+    # implemented (as it relied on actual filenames with upper and lower case)
+#    base_path = normcase(abspath(normpath(base_path)))
+#    target = normcase(abspath(normpath(target)))
+    base_path = abspath(normpath(base_path))
+    target = abspath(normpath(target))
 
     if base_path == target:
         return '.'
