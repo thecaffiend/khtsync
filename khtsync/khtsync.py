@@ -355,7 +355,10 @@ class Sync():
         self.local_dir or self.remote_dir to get the proper full path. e.g if 
         self.local_dir is /var/scm/git/repo and the full path to the selected file 
         is /var/scm/git/repo/path/to/file, the file path passed in should be 
-        /path/to/file
+        path/to/file.
+        
+        If a folder is being deleted, all sub files and folders must also be 
+        passed in selected_files as well.
         
         direction may only be UP or DOWN. Syncing in both directions is not 
         supported by this method.
@@ -402,7 +405,7 @@ class Sync():
             for dir in dirs:
                 path = os.path.join(root, dir)
                 local_objs[relpth.relpath(self.local_dir,path)] = os.path.getmtime(path)
-                
+        
         # remove ignored files.
         for f in self.ignored_files:
             if f in local_objs:
@@ -485,7 +488,6 @@ class Sync():
         if selected_files is None:
             update,local_objs,remote_objs = self.build_update_all(direction)
         else:
-            log.warn('*** files %s ***' % files)
             update,local_objs,remote_objs = self.build_update_selected(direction, selected_files)
         
         self.errors = {}
@@ -649,8 +651,8 @@ if __name__ == '__main__':
     syncport=8022
     
     # sync all both ways
-    files = None
-    d = BOTH
+    #files = None
+    #d = BOTH
     
     # sync all up
     #d = UP
@@ -660,8 +662,8 @@ if __name__ == '__main__':
     
     # selected file tests
     # for up testing
-    # files = ['IAmOnlyOnLocal.txt', 'file2.txt', 'weirdness.tst']
-    # d = UP
+    files = ['IAmOnlyOnLocal.txt', 'file2.txt', 'weirdness.tst']
+    d = UP
     
     # for down testing
     # files = ['IAmOnlyOnServer.txt', 'um.sh', 'file.txt', 'weirdnesss-Copy.tst']
